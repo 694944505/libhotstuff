@@ -121,6 +121,43 @@ class BlockDeliveryContext: public promise_t {
 };
 
 
+struct MsgDecisionCheck {
+    static const opcode_t opcode = 0x4;
+    DataStream serialized;
+    DecisionCheck decision_check;
+    MsgDecisionCheck(const DecisionCheck &);
+    MsgDecisionCheck(DataStream &&s): serialized(std::move(s)) {}
+    void postponed_parse(HotStuffCore *hsc);
+};
+
+struct MsgConflict {
+    static const opcode_t opcode = 0x5;
+    DataStream serialized;
+    Conflict conflict;
+    MsgConflict(const Conflict &);
+    MsgConflict(DataStream &&s): serialized(std::move(s)) {}
+    void postponed_parse(HotStuffCore *hsc);
+};
+
+class Accountability {
+    std::unordered_map<uint32_t, std::unordered_map<uint256_t, std::vector<DecisionCheck>>> other_decisions;
+    std::unordered_map<uint32_t, DecisionCheck> my_decisions;
+    peernetwork_t &pn;
+    BoxObj<EntityStorage> &storage;
+    HotStuffCore *hsc;
+public:
+    Accountability(peernetwork_t & pn, HotStuffCore *hsc, BoxObj<EntityStorage> &storage) : pn(pn), hsc(hsc), storage(storage) {}
+    ~Accountability() {}
+    void add_other_decision(DecisionCheck &dc);
+
+     void add_my_decision(DecisionCheck& dc);
+
+    void check_conflicts(DecisionCheck my_dc, DecisionCheck other_dc);
+
+    uint256_t get_qc_hash(uint32_t height);
+
+};
+
 /** HotStuff protocol (with network implementation). */
 class HotStuffBase: public HotStuffCore {
     using BlockFetchContext = FetchContext<ENT_TYPE_BLK>;
@@ -128,7 +165,8 @@ class HotStuffBase: public HotStuffCore {
 
     friend BlockFetchContext;
     friend CmdFetchContext;
-
+    /* == accountability futures*/
+    Accountability accountability;
     public:
     using Net = PeerNetwork<opcode_t>;
     using commit_cb_t = std::function<void(const Finality &)>;
@@ -186,6 +224,13 @@ class HotStuffBase: public HotStuffCore {
     inline void propose_handler(MsgPropose &&, const Net::conn_t &);
     /** deliver consensus message: <vote> */
     inline void vote_handler(MsgVote &&, const Net::conn_t &);
+    /** deliver consensus message: <check> */
+    inline void decision_check_handler(MsgDecisionCheck &&msg, const Net::conn_t &conn);
+    /** deliver consensus message: <conflict> */
+    inline void conflict_handler(MsgConflict &&msg, const Net::conn_t &conn);
+
+    inline void on_receive_decision_check(DecisionCheck &dc);
+    inline void on_receive_conflict(Conflict &conflict);
     /** fetches full block data */
     inline void req_blk_handler(MsgReqBlock &&, const Net::conn_t &);
     /** receives a block */
@@ -197,6 +242,7 @@ class HotStuffBase: public HotStuffCore {
     void do_vote(ReplicaID, const Vote &) override;
     void do_decide(Finality &&) override;
     void do_consensus(const block_t &blk) override;
+    void add_my_decision(const block_t &blk) override;
 
     protected:
 

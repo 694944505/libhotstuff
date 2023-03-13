@@ -65,6 +65,7 @@ class QuorumCert: public Serializable, public Cloneable {
     virtual bool verify(const ReplicaConfig &config) = 0;
     virtual const uint256_t &get_obj_hash() const = 0;
     virtual QuorumCert *clone() override = 0;
+    virtual bool has_voter(ReplicaID replica) const { return false; }
 };
 
 using part_cert_bt = BoxObj<PartCert>;
@@ -422,6 +423,11 @@ class QuorumCertSecp256k1: public QuorumCert {
         s >> obj_hash >> rids;
         for (size_t i = 0; i < rids.size(); i++)
             if (rids.get(i)) s >> sigs[i];
+    }
+
+    bool has_voter(ReplicaID rid) const override { 
+        if (rids.size() <= rid) return false;
+        return rids.get(rid); 
     }
 };
 
