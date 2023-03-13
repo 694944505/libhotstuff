@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <cmath>
 #include "hotstuff/hotstuff.h"
 #include "hotstuff/client.h"
 #include "hotstuff/liveness.h"
@@ -88,7 +89,7 @@ void Accountability::add_other_decision(DecisionCheck &dc) {
     if (map.size() > 1) {
         for (auto & m1 : map) {
             for (auto & m2: map) {
-                if (m1.first != m2.first) {
+                if (test || m1.first != m2.first) {
                     for (auto & d1: m1.second) {
                         for (auto & d2: m2.second) {
                             pn.send_msg(MsgDecisionCheck(d1), hsc->get_config().get_peer_id(d2.voter));
@@ -106,17 +107,25 @@ void Accountability::add_other_decision(DecisionCheck &dc) {
 }
 
 void Accountability::add_my_decision(DecisionCheck& dc) {
-    ReplicaID checker = dc.blk_height  % hsc->get_config().nreplicas;
-    if (checker != hsc->get_id()) {
-        pn.send_msg(MsgDecisionCheck(dc), hsc->get_config().get_peer_id(checker));
+    detect_server_from = detect_server_to;
+    detect_server_to = size_t (std::floor(dc.blk_height * fault_detect_server_num));
+    std::string ids;
+    if (detect_server_from < detect_server_to) {
+        MsgDecisionCheck msg_check(dc);
+        for (size_t i = detect_server_from; i < detect_server_to; i++) {
+            ReplicaID id = i % hsc->get_config().nreplicas;
+            if (id != hsc->get_id()) {
+                ids += std::to_string(id) + " ";
+                pn.send_msg(msg_check, hsc->get_config().get_peer_id(id));
+            }
+        }
     }
-        
     my_decisions[dc.blk_height] = dc;
     auto itor = other_decisions.find(dc.blk_height);
     if (itor != other_decisions.end()) {
         auto & map = itor->second;
         for (auto & m: map) {
-            if (m.first != dc.blk_hash) {
+            if (test || m.first != dc.blk_hash) {
                 for (auto & d: m.second) {
                     check_conflicts(dc, d);
                 }
@@ -368,7 +377,7 @@ void HotStuffBase::on_receive_conflict(Conflict &conflict) {
     uint256_t my_hash = accountability.get_qc_hash(conflict.blk_height);
 
     block_t blk = HotStuffCore::get_delivered_blk(my_hash);
-    if(blk->get_qc_ref()->get_hash() != conflict.blk_hash) {
+    if(blk->get_qc_ref()->get_hash() == conflict.blk_hash && !accountability.test) {
         LOG_WARN("wrong conflict message + %s", std::string(conflict).c_str());
         return;
     }
@@ -377,7 +386,7 @@ void HotStuffBase::on_receive_conflict(Conflict &conflict) {
     }
     for(ReplicaID i = 0; i < get_config().nreplicas; i++){
         if (conflict.cert->has_voter(i) && blk->get_qc()->has_voter(i)) {
-            LOG_ERROR("conflict between %d and %d at %d", i, get_id(), conflict.blk_height);
+            LOG_ERROR("guilty node %d at %d", i, conflict.blk_height);
         }
     }
     
@@ -385,6 +394,7 @@ void HotStuffBase::on_receive_conflict(Conflict &conflict) {
 }
 
 void HotStuffBase::add_my_decision(const block_t &blk) {
+    if (!accountability_enabled) return;
     block_t parent_blk = HotStuffCore::get_delivered_blk(blk->get_qc_ref()->get_parent_hashes()[0]);
     DecisionCheck dc(HotStuffCore::get_id(), blk->get_qc_ref()->get_height(), blk->get_qc_ref()->get_hash(), parent_blk->get_height(), parent_blk->get_hash(), blk->get_hash(), this);
     accountability.add_my_decision(dc);
@@ -492,7 +502,8 @@ HotStuffBase::HotStuffBase(uint32_t blk_size,
                     pacemaker_bt pmaker,
                     EventContext ec,
                     size_t nworker,
-                    const Net::Config &netconfig):
+                    const Net::Config &netconfig,
+                    double fault_detect_server_num):
         HotStuffCore(rid, std::move(priv_key)),
         listen_addr(listen_addr),
         blk_size(blk_size),
@@ -512,7 +523,7 @@ HotStuffBase::HotStuffBase(uint32_t blk_size,
         part_delivery_time(0),
         part_delivery_time_min(double_inf),
         part_delivery_time_max(0),
-        accountability(pn, this, storage)
+        accountability(pn, this, storage, fault_detect_server_num)
 {
     /* register the handlers for msg from replicas */
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::propose_handler, this, _1, _2));
@@ -529,6 +540,11 @@ HotStuffBase::HotStuffBase(uint32_t blk_size,
             HOTSTUFF_LOG_WARN("network async error: %s\n", err.what());
         }
     });
+    this->fault_detect_server_num = fault_detect_server_num;
+    if(fault_detect_server_num > 1e-6)
+        accountability_enabled = true;
+    else
+        accountability_enabled = false;
     pn.start();
     pn.listen(listen_addr);
 }

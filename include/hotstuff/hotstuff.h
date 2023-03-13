@@ -145,8 +145,13 @@ class Accountability {
     peernetwork_t &pn;
     BoxObj<EntityStorage> &storage;
     HotStuffCore *hsc;
+    ReplicaID detect_server_from = 0;
+    ReplicaID detect_server_to = 0;
+    double fault_detect_server_num;
 public:
-    Accountability(peernetwork_t & pn, HotStuffCore *hsc, BoxObj<EntityStorage> &storage) : pn(pn), hsc(hsc), storage(storage) {}
+    bool test = false;
+    Accountability(peernetwork_t & pn, HotStuffCore *hsc, BoxObj<EntityStorage> &storage, double num) : 
+        pn(pn), hsc(hsc), storage(storage), fault_detect_server_num(num) {}
     ~Accountability() {}
     void add_other_decision(DecisionCheck &dc);
 
@@ -167,6 +172,8 @@ class HotStuffBase: public HotStuffCore {
     friend CmdFetchContext;
     /* == accountability futures*/
     Accountability accountability;
+    double fault_detect_server_num;
+    bool accountability_enabled;
     public:
     using Net = PeerNetwork<opcode_t>;
     using commit_cb_t = std::function<void(const Finality &)>;
@@ -258,7 +265,8 @@ class HotStuffBase: public HotStuffCore {
             pacemaker_bt pmaker,
             EventContext ec,
             size_t nworker,
-            const Net::Config &netconfig);
+            const Net::Config &netconfig,
+            double fault_detect_server_num = 0);
 
     ~HotStuffBase();
 
@@ -329,7 +337,8 @@ class HotStuff: public HotStuffBase {
             pacemaker_bt pmaker,
             EventContext ec = EventContext(),
             size_t nworker = 4,
-            const Net::Config &netconfig = Net::Config()):
+            const Net::Config &netconfig = Net::Config(),
+            double fault_detect_server_num = 0):
         HotStuffBase(blk_size,
                     rid,
                     new PrivKeyType(raw_privkey),
@@ -337,7 +346,10 @@ class HotStuff: public HotStuffBase {
                     std::move(pmaker),
                     ec,
                     nworker,
-                    netconfig) {}
+                    netconfig,
+                    fault_detect_server_num) {
+                        
+                    }
 
     void start(const std::vector<std::tuple<NetAddr, bytearray_t, bytearray_t>> &replicas, bool ec_loop = false) {
         std::vector<std::tuple<NetAddr, pubkey_bt, uint256_t>> reps;

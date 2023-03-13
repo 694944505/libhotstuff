@@ -129,7 +129,8 @@ class HotStuffApp: public HotStuff {
                 const EventContext &ec,
                 size_t nworker,
                 const Net::Config &repnet_config,
-                const ClientNetwork<opcode_t>::Config &clinet_config);
+                const ClientNetwork<opcode_t>::Config &clinet_config,
+                double fault_detect_server_num = 0);
 
     void start(const std::vector<std::tuple<NetAddr, bytearray_t, bytearray_t>> &reps);
     void stop();
@@ -173,6 +174,7 @@ int main(int argc, char **argv) {
     auto opt_notls = Config::OptValFlag::create(false);
     auto opt_max_rep_msg = Config::OptValInt::create(4 << 20); // 4M by default
     auto opt_max_cli_msg = Config::OptValInt::create(65536); // 64K by default
+    auto opt_fault_detect_server_num = Config::OptValDouble::create(0);
 
     config.add_opt("block-size", opt_blk_size, Config::SET_VAL);
     config.add_opt("parent-limit", opt_parent_limit, Config::SET_VAL);
@@ -197,6 +199,7 @@ int main(int argc, char **argv) {
     config.add_opt("max-rep-msg", opt_max_rep_msg, Config::SET_VAL, 'S', "the maximum replica message size");
     config.add_opt("max-cli-msg", opt_max_cli_msg, Config::SET_VAL, 'S', "the maximum client message size");
     config.add_opt("help", opt_help, Config::SWITCH_ON, 'h', "show this help info");
+    config.add_opt("fault-detect-server-num", opt_fault_detect_server_num, Config::SET_VAL);
 
     EventContext ec;
     config.parse(argc, argv);
@@ -273,7 +276,8 @@ int main(int argc, char **argv) {
                         ec,
                         opt_nworker->get(),
                         repnet_config,
-                        clinet_config);
+                        clinet_config,
+                        opt_fault_detect_server_num->get());
     std::vector<std::tuple<NetAddr, bytearray_t, bytearray_t>> reps;
     for (auto &r: replicas)
     {
@@ -305,9 +309,10 @@ HotStuffApp::HotStuffApp(uint32_t blk_size,
                         const EventContext &ec,
                         size_t nworker,
                         const Net::Config &repnet_config,
-                        const ClientNetwork<opcode_t>::Config &clinet_config):
+                        const ClientNetwork<opcode_t>::Config &clinet_config,
+                        double fault_detect_server_num):
     HotStuff(blk_size, idx, raw_privkey,
-            plisten_addr, std::move(pmaker), ec, nworker, repnet_config),
+            plisten_addr, std::move(pmaker), ec, nworker, repnet_config, fault_detect_server_num),
     stat_period(stat_period),
     impeach_timeout(impeach_timeout),
     ec(ec),
