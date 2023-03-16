@@ -140,14 +140,15 @@ struct MsgConflict {
 };
 
 class Accountability {
-    std::unordered_map<uint32_t, std::unordered_map<uint256_t, std::vector<DecisionCheck>>> other_decisions;
-    std::unordered_map<uint32_t, DecisionCheck> my_decisions;
+    std::unordered_map<uint32_t, std::unordered_set<DecisionCheck *>> other_decisions;
+    std::unordered_map<uint32_t, DecisionCheck *> my_decisions;
     peernetwork_t &pn;
     BoxObj<EntityStorage> &storage;
     HotStuffCore *hsc;
     ReplicaID detect_server_from = 0;
     ReplicaID detect_server_to = 0;
     double fault_detect_server_num;
+    std::mutex mutex;
 public:
     bool test = false;
     Accountability(peernetwork_t & pn, HotStuffCore *hsc, BoxObj<EntityStorage> &storage, double num) : 
