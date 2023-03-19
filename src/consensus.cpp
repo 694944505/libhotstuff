@@ -93,8 +93,27 @@ void HotStuffCore::update_hqc(const block_t &_hqc, const quorum_cert_bt &qc) {
 
 void HotStuffCore::update(const block_t &nblk) {
     /* nblk = b*, blk2 = b'', blk1 = b', blk = b */
+#ifndef HOTSTUFF_TWO_STEP
+    /* three-step HotStuff */
+    const block_t &blk2 = nblk->qc_ref;
+    if (blk2 == nullptr) return;
+    /* decided blk could possible be incomplete due to pruning */
+    if (blk2->decision) return;
+    update_hqc(blk2, nblk->qc);
 
-    /* 3-step HotStuff */
+    const block_t &blk1 = blk2->qc_ref;
+    if (blk1 == nullptr) return;
+    if (blk1->decision) return;
+    if (blk1->height > b_lock->height) b_lock = blk1;
+
+    const block_t &blk = blk1->qc_ref;
+    if (blk == nullptr) return;
+    if (blk->decision) return;
+
+    /* commit requires direct parent */
+    if (blk2->parents[0] != blk1 || blk1->parents[0] != blk) return;
+#else
+    /* two-step HotStuff */
     const block_t &blk1 = nblk->qc_ref;
     if (blk1 == nullptr) return;
     if (blk1->decision) return;
@@ -107,7 +126,7 @@ void HotStuffCore::update(const block_t &nblk) {
 
     /* commit requires direct parent */
     if (blk1->parents[0] != blk) return;
-
+#endif
     /* otherwise commit */
     std::vector<block_t> commit_queue;
     block_t b;
