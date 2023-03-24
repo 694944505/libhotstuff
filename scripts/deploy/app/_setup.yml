@@ -1,7 +1,10 @@
 ---
 # available vars:
 # workdir -- the local directory of run_id
-
+- name: apt update
+  block:
+    - command: apt update
+    - command: apt upgrade -y
 - name: setup libhotstuff example binaries
   block:
     - apt:

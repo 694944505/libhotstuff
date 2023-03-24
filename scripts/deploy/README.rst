@@ -53,7 +53,7 @@ Step 2 - Generate the Deployment Setup
 - Generate ``node.ini`` and ``hotstuff.gen.*.conf`` by running ``./gen_all.sh``.
 - Change the ssh key configuration in ``group_vars/all.yml``.
 - Build ``libhotstuff`` on all remote machines by ``./run.sh setup``.
-
+// cmake -DCMAKE_BUID_TYPE=Release -DHOTSTUFF_PROTO_LOG=OFF "-DCMAKE_CXX_FLAGS=-g -DHOTSTUFF_ENABLE_BENCHMARK"
 Step 3 - Run the Experiment
 ---------------------------
 
@@ -64,7 +64,7 @@ Step 3 - Run the Experiment
 - (for replicas) Create a new experiment run and start all client processes by ``./run_cli.sh new myrun1_cli``.
 - (wait until all commands are submitted, or you simply would like to end the experiment)
 - To collect the results, run ``./run_cli.sh stop myrun1_cli`` followed by ``./run_cli.sh fetch myrun1_cli``.
-- To analyze the results, run ``cat myrun1_cli/remote/*/log/stderr | python ../thr_hist.py``.
+- To analyze the results, run ``cat myrun1_cli/remote/*/log/stderr | python3 ../thr_hist.py``.
 
   - With all default settings on ``c5.4xlarge``, I got the following results:
 

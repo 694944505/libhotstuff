@@ -1,0 +1,8 @@
+0:172.30.195.28:10000;20000	hotstuff.gen-sec0.conf
+1:172.30.195.38:10000;20000	hotstuff.gen-sec1.conf
+2:172.30.195.31:10000;20000	hotstuff.gen-sec2.conf
+3:172.30.195.41:10000;20000	hotstuff.gen-sec3.conf
+4:172.30.195.44:10000;20000	hotstuff.gen-sec4.conf
+5:172.30.195.40:10000;20000	hotstuff.gen-sec5.conf
+6:172.30.195.42:10000;20000	hotstuff.gen-sec6.conf
+7:172.30.195.35:10000;20000	hotstuff.gen-sec7.conf

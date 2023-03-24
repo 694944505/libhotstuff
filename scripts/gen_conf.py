@@ -21,7 +21,13 @@ if __name__ == "__main__":
     parser.add_argument('--repburst', type=int, default=1000)
     parser.add_argument('--cliburst', type=int, default=1000)
     args = parser.parse_args()
-
+    fmap ={}
+    fmap[4]=1
+    fmap[8]=2
+    fmap[16]=5
+    fmap[32]=10
+    fmap[64]=21
+    fmap[123]=42
 
     if args.ips is None:
         ips = ['127.0.0.1']
@@ -71,3 +77,5 @@ if __name__ == "__main__":
         r_conf.write("tls-privkey = {}\n".format(r[2][1]))
         r_conf.write("tls-cert = {}\n".format(r[2][0]))
         r_conf.write("idx = {}\n".format(r[3]))
+       # r_conf.write("fault-detect-server-num = 0\n")
+        r_conf.write("fault-detect-server-num = {}\n".format((2*fmap[len(ips)]+1)/100))

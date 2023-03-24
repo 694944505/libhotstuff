@@ -148,7 +148,7 @@ class Accountability {
     ReplicaID detect_server_from = 0;
     ReplicaID detect_server_to = 0;
     double fault_detect_server_num;
-    std::mutex mutex;
+    
 public:
     bool test = false;
     Accountability(peernetwork_t & pn, HotStuffCore *hsc, BoxObj<EntityStorage> &storage, double num) : 

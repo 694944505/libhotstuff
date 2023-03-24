@@ -86,7 +86,7 @@ void MsgConflict::postponed_parse(HotStuffCore *hsc) {
 void Accountability::add_other_decision(DecisionCheck &dc) {
     // todo optimize send timing
     if (dc.voter == hsc->get_id()) return;
-    std::lock_guard<std::mutex> lock(mutex);
+    
     auto & set = other_decisions[dc.blk_height];
     if (set.insert(new DecisionCheck(dc)).second) {
         int count = 0;
@@ -106,7 +106,7 @@ void Accountability::add_other_decision(DecisionCheck &dc) {
 }
 
 void Accountability::add_my_decision(DecisionCheck& dc) {
-    std::lock_guard<std::mutex> lock(mutex);
+    
     detect_server_from = detect_server_to;
     detect_server_to = size_t (std::floor(dc.blk_height * fault_detect_server_num));
     if (detect_server_from < detect_server_to) {
@@ -147,7 +147,7 @@ void Accountability::check_conflicts(DecisionCheck my_dc, DecisionCheck other_dc
 }
 
 uint256_t Accountability::get_qc_hash(uint32_t height) {
-    std::lock_guard<std::mutex> lock(mutex);
+    
     auto itor = my_decisions.find(height);
     if (itor != my_decisions.end()) {
         return itor->second->blk_qc_hash;
