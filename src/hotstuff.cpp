@@ -74,13 +74,13 @@ void MsgDecisionCheck::postponed_parse(HotStuffCore *hsc) {
     serialized >> decision_check;
 }
 
-const opcode_t MsgConflict::opcode;
-MsgConflict::MsgConflict(const Conflict &conflict) { 
-    serialized << conflict; 
+const opcode_t MsgProof::opcode;
+MsgProof::MsgProof(const Proof &proof) { 
+    serialized << proof; 
 }
-void MsgConflict::postponed_parse(HotStuffCore *hsc) {
-    conflict.hsc = hsc;
-    serialized >> conflict;
+void MsgProof::postponed_parse(HotStuffCore *hsc) {
+    proof.hsc = hsc;
+    serialized >> proof;
 }
 
 void Accountability::add_other_decision(DecisionCheck &dc) {
@@ -93,7 +93,7 @@ void Accountability::add_other_decision(DecisionCheck &dc) {
         for (auto & other : set) {
             if (++count == set.size()) break;
             if (test || other->blk_hash != dc.blk_hash) {
-                check_conflicts(dc, *other);
+                check_conflictss(dc, *other);
                 pn.send_msg(MsgDecisionCheck(dc), hsc->get_config().get_peer_id(other->voter));
                 pn.send_msg(MsgDecisionCheck(*other), hsc->get_config().get_peer_id(dc.voter));
             }
@@ -101,7 +101,7 @@ void Accountability::add_other_decision(DecisionCheck &dc) {
     }
     auto itor = my_decisions.find(dc.blk_height);
     if (itor != my_decisions.end() &&(test || itor->second->blk_hash != dc.blk_hash)) {
-        check_conflicts(*itor->second, dc);
+        check_conflictss(*itor->second, dc);
     }
 }
 
@@ -109,9 +109,9 @@ void Accountability::add_my_decision(DecisionCheck& dc) {
     
     detect_server_from = detect_server_to;
     detect_server_to = size_t (std::floor(dc.blk_height * fault_detect_server_num));
+    dc.cert = hsc->create_part_cert(*hsc->get_priv_key(), dc.get_hash());
+    MsgDecisionCheck msg_check(dc);
     if (detect_server_from < detect_server_to) {
-        dc.cert = hsc->create_part_cert(*hsc->get_priv_key(), dc.get_hash());
-        MsgDecisionCheck msg_check(dc);
         for (size_t i = detect_server_from; i < detect_server_to; i++) {
             ReplicaID id = i % hsc->get_config().nreplicas;
             if (id != hsc->get_id()) {
@@ -124,25 +124,25 @@ void Accountability::add_my_decision(DecisionCheck& dc) {
     if (itor != other_decisions.end()) {
         for (auto & m: itor->second) {
             if (test || m->blk_hash != dc.blk_hash) {
-                check_conflicts(dc, *m);
+                check_conflictss(dc, *m);
             }
         }
     }
 }
 
-void Accountability::check_conflicts(DecisionCheck my_dc, DecisionCheck other_dc) {
+void Accountability::check_conflictss(DecisionCheck my_dc, DecisionCheck other_dc) {
     try{
         if (my_dc.parent_blk_hash == other_dc.parent_blk_hash) {
             block_t my_blk = storage->find_blk(my_dc.blk_qc_hash);
             quorum_cert_bt qc = my_blk->get_qc()->clone();
-            Conflict conflict(my_dc.voter, my_dc.blk_height, my_dc.blk_hash, my_blk->get_qc()->clone(), hsc);
-            pn.send_msg(MsgConflict(conflict), hsc->get_config().get_peer_id(other_dc.voter));
+            Proof proof(my_dc.voter, my_dc.blk_height, my_dc.blk_hash, my_blk->get_qc()->clone(), hsc);
+            pn.send_msg(MsgProof(proof), hsc->get_config().get_peer_id(other_dc.voter));
         } else {
             auto my_parent = my_decisions[my_dc.parent_blk_height];
             pn.send_msg(MsgDecisionCheck(*my_parent), hsc->get_config().get_peer_id(other_dc.voter));
         }
     } catch (std::exception &e) {
-        HOTSTUFF_LOG_ERROR("check_conflicts error + %s" , e.what());
+        HOTSTUFF_LOG_ERROR("check_conflictss error + %s" , e.what());
     }
 }
 
@@ -345,18 +345,18 @@ void HotStuffBase::decision_check_handler(MsgDecisionCheck &&msg, const Net::con
     });
 }
 
-void HotStuffBase::conflict_handler(MsgConflict &&msg, const Net::conn_t &conn) {
+void HotStuffBase::proof_handler(MsgProof &&msg, const Net::conn_t &conn) {
     const PeerId &peer = conn->get_peer_id();
     if (peer.is_null()) return;
     msg.postponed_parse(this);
-    RcObj<Conflict> conflict(new Conflict(std::move(msg.conflict)));
+    RcObj<Proof> proof(new Proof(std::move(msg.proof)));
     promise::all(std::vector<promise_t>{
-        conflict->verify(vpool),
-    }).then([this, conflict=std::move(conflict)](const promise::values_t values) {
+        proof->verify(vpool),
+    }).then([this, proof=std::move(proof)](const promise::values_t values) {
         if (!promise::any_cast<bool>(values[0]))
-            LOG_WARN("invalid conflict from %d", conflict->voter);
+            LOG_WARN("invalid proof from %d", proof->voter);
         else
-            on_receive_conflict(*conflict);
+            on_receive_proof(*proof);
     });
 }
 
@@ -370,19 +370,19 @@ void HotStuffBase::on_receive_decision_check(DecisionCheck &dc) {
     }
 }
 
-void HotStuffBase::on_receive_conflict(Conflict &conflict) {
-    uint256_t my_hash = accountability.get_qc_hash(conflict.blk_height);
+void HotStuffBase::on_receive_proof(Proof &proof) {
+    uint256_t my_hash = accountability.get_qc_hash(proof.blk_height);
     block_t blk = HotStuffCore::get_delivered_blk(my_hash);
-    if(blk->get_qc_ref()->get_hash() == conflict.blk_hash && !accountability.test) {
-        LOG_WARN("wrong conflict message + %s", std::string(conflict).c_str());
+    if(blk->get_qc_ref()->get_hash() == proof.blk_hash && !accountability.test) {
+        LOG_WARN("wrong proof message + %s", std::string(proof).c_str());
         return;
     }
-    if (!conflict.verify()) {
-        LOG_WARN("invalid conflict message + %s", std::string(conflict).c_str());
+    if (!proof.verify()) {
+        LOG_WARN("invalid proof message + %s", std::string(proof).c_str());
     }
     for(ReplicaID i = 0; i < get_config().nreplicas; i++){
-        if (conflict.cert->has_voter(i) && blk->get_qc()->has_voter(i)) {
-            LOG_ERROR("guilty node %d at %d", i, conflict.blk_height);
+        if (proof.cert->has_voter(i) && blk->get_qc()->has_voter(i)) {
+            LOG_ERROR("guilty node %d at %d", i, proof.blk_height);
         }
     }
     
@@ -525,7 +525,7 @@ HotStuffBase::HotStuffBase(uint32_t blk_size,
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::propose_handler, this, _1, _2));
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::vote_handler, this, _1, _2));
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::decision_check_handler, this, _1, _2));
-    pn.reg_handler(salticidae::generic_bind(&HotStuffBase::conflict_handler, this, _1, _2));
+    pn.reg_handler(salticidae::generic_bind(&HotStuffBase::proof_handler, this, _1, _2));
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::req_blk_handler, this, _1, _2));
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::resp_blk_handler, this, _1, _2));
     pn.reg_conn_handler(salticidae::generic_bind(&HotStuffBase::conn_handler, this, _1, _2));

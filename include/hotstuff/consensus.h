@@ -371,12 +371,12 @@ struct DecisionCheck: public Serializable {
     }
 };
 
-/** Abstraction for conflict messages. */
-struct Conflict: public Serializable{
+/** Abstraction for proof messages. */
+struct Proof: public Serializable{
     ReplicaID voter;
     /** block height*/
     uint32_t blk_height;
-    /** my conflict block */
+    /** my proof block */
     uint256_t blk_hash;
     /** proof of validity for the vote */
     quorum_cert_bt cert;
@@ -384,8 +384,8 @@ struct Conflict: public Serializable{
     /** handle of the core object to allow polymorphism */
     HotStuffCore *hsc;
 
-    Conflict(): cert(nullptr), hsc(nullptr) {}
-    Conflict(ReplicaID voter,
+    Proof(): cert(nullptr), hsc(nullptr) {}
+    Proof(ReplicaID voter,
         const uint32_t &blk_height,
         const uint256_t &blk_hash,
         quorum_cert_bt &&cert,
@@ -395,14 +395,14 @@ struct Conflict: public Serializable{
         blk_hash(blk_hash),
         cert(std::move(cert)), hsc(hsc) {}
 
-    Conflict(const Conflict &other):
+    Proof(const Proof &other):
         voter(other.voter),
         blk_hash(other.blk_hash),
         blk_height(other.blk_height),
         cert(other.cert ? other.cert->clone() : nullptr),
         hsc(other.hsc) {}
 
-    Conflict(Conflict &&other) = default;
+    Proof(Proof &&other) = default;
     
     void serialize(DataStream &s) const override {
         s << voter << blk_height << blk_hash << *cert;

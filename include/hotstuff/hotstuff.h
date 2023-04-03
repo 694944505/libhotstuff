@@ -130,12 +130,12 @@ struct MsgDecisionCheck {
     void postponed_parse(HotStuffCore *hsc);
 };
 
-struct MsgConflict {
+struct MsgProof {
     static const opcode_t opcode = 0x5;
     DataStream serialized;
-    Conflict conflict;
-    MsgConflict(const Conflict &);
-    MsgConflict(DataStream &&s): serialized(std::move(s)) {}
+    Proof proof;
+    MsgProof(const Proof &);
+    MsgProof(DataStream &&s): serialized(std::move(s)) {}
     void postponed_parse(HotStuffCore *hsc);
 };
 
@@ -158,7 +158,7 @@ public:
 
      void add_my_decision(DecisionCheck& dc);
 
-    void check_conflicts(DecisionCheck my_dc, DecisionCheck other_dc);
+    void check_conflictss(DecisionCheck my_dc, DecisionCheck other_dc);
 
     uint256_t get_qc_hash(uint32_t height);
 
@@ -234,11 +234,11 @@ class HotStuffBase: public HotStuffCore {
     inline void vote_handler(MsgVote &&, const Net::conn_t &);
     /** deliver consensus message: <check> */
     inline void decision_check_handler(MsgDecisionCheck &&msg, const Net::conn_t &conn);
-    /** deliver consensus message: <conflict> */
-    inline void conflict_handler(MsgConflict &&msg, const Net::conn_t &conn);
+    /** deliver consensus message: <proof> */
+    inline void proof_handler(MsgProof &&msg, const Net::conn_t &conn);
 
     inline void on_receive_decision_check(DecisionCheck &dc);
-    inline void on_receive_conflict(Conflict &conflict);
+    inline void on_receive_proof(Proof &proof);
     /** fetches full block data */
     inline void req_blk_handler(MsgReqBlock &&, const Net::conn_t &);
     /** receives a block */
