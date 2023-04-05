@@ -340,7 +340,7 @@ struct DecisionCheck: public Serializable {
         DataStream s;
         s   << "<check "
             << "rid=" << std::to_string(voter) << " "
-            << "blk=" << get_hex10(blk_hash)
+            << "blk=" << get_hex10(blk_hash)<<" "
             << "height=" << std::to_string(blk_height)
             << ">"
           ;
@@ -415,7 +415,14 @@ struct Proof: public Serializable{
           << "rid=" << std::to_string(voter) << " "
           << "blk=" << get_hex10(blk_hash) << " "
           << "height=" << std::to_string(blk_height) << " "
+          <<" certhash=" << get_hex10(cert->get_obj_hash())
           << ">";
+        return s;
+    }
+    std::string tostring() const{
+        std::string s;
+        s = "vote: rid=" + std::to_string(voter) + " blk=" + get_hex10(blk_hash) + " height=" + std::to_string(blk_height) 
+        + " certhash=" + get_hex10(cert->get_obj_hash());
         return s;
     }
 };

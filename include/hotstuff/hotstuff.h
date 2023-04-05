@@ -140,10 +140,10 @@ struct MsgProof {
 };
 
 class Accountability {
-    std::unordered_map<uint32_t, std::unordered_set<std::shared_ptr<DecisionCheck>>> other_decisions;
+    std::unordered_map<uint32_t, std::unordered_map<ReplicaID, std::shared_ptr<DecisionCheck>>> other_decisions;
     std::unordered_map<uint32_t, std::shared_ptr<DecisionCheck>> my_decisions;
-    std::unordered_map<ReplicaID, std::Vector<std::shared_ptr<DecisionCheck>>> conflict_map;
-    std::unordered_map<ReplicaID, std::Vector<std::shared_ptr<Proof>>> proof_map;
+    std::unordered_map<ReplicaID, std::vector<std::shared_ptr<DecisionCheck>>> conflict_map;
+    std::unordered_map<ReplicaID, std::vector<std::shared_ptr<Proof>>> proof_map;
     peernetwork_t &pn;
     BoxObj<EntityStorage> &storage;
     HotStuffCore *hsc;
@@ -155,12 +155,12 @@ class Accountability {
     */
     
 public:
-    bool test = true;
+    bool test = false;
     Accountability(peernetwork_t & pn, HotStuffCore *hsc, BoxObj<EntityStorage> &storage, double num) : 
         pn(pn), hsc(hsc), storage(storage), fault_detect_server_num(num) {
             for (ReplicaID i = 0; i < num; i++) {
-                conflict_map[i] = std::Vector<std::shared_ptr<DecisionCheck>>();
-                proof_map[i] = std::Vector<std::shared_ptr<Proof>>();
+                conflict_map[i] = std::vector<std::shared_ptr<DecisionCheck>>();
+                proof_map[i] = std::vector<std::shared_ptr<Proof>>();
             }
         }
     ~Accountability() {}
@@ -170,7 +170,7 @@ public:
 
     void check_conflict(std::shared_ptr<DecisionCheck> my_dc, std::shared_ptr<DecisionCheck> other_dc);
 
-    void add_proof(Proof &proof);
+    void add_proof(std::shared_ptr<Proof> proof);
 
     uint256_t get_qc_hash(uint32_t height);
 
@@ -249,8 +249,8 @@ class HotStuffBase: public HotStuffCore {
     /** deliver consensus message: <proof> */
     inline void proof_handler(MsgProof &&msg, const Net::conn_t &conn);
 
-    inline void on_receive_decision_check(DecisionCheck &dc);
-    inline void on_receive_proof(Proof &proof);
+    inline void on_receive_decision_check(std::shared_ptr<DecisionCheck> dc);
+    inline void on_receive_proof(std::shared_ptr<Proof> proof);
     /** fetches full block data */
     inline void req_blk_handler(MsgReqBlock &&, const Net::conn_t &);
     /** receives a block */
