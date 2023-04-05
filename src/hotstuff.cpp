@@ -83,33 +83,32 @@ void MsgProof::postponed_parse(HotStuffCore *hsc) {
     serialized >> proof;
 }
 
-void Accountability::add_other_decision(DecisionCheck &dc) {
+void Accountability::add_other_decision(std::shared_ptr<DecisionCheck> dc) {
     // todo optimize send timing
-    if (dc.voter == hsc->get_id()) return;
+    if (dc->voter == hsc->get_id()) return;
     
-    auto & set = other_decisions[dc.blk_height];
-    if (set.insert(new DecisionCheck(dc)).second) {
+    auto & set = other_decisions[dc->blk_height];
+    if (set.insert(dc).second) {
         int count = 0;
         for (auto & other : set) {
             if (++count == set.size()) break;
-            if (test || other->blk_hash != dc.blk_hash) {
-                check_conflictss(dc, *other);
-                pn.send_msg(MsgDecisionCheck(dc), hsc->get_config().get_peer_id(other->voter));
-                pn.send_msg(MsgDecisionCheck(*other), hsc->get_config().get_peer_id(dc.voter));
+            if (test || other->blk_hash != dc->blk_hash) {
+                pn.send_msg(MsgDecisionCheck(*dc), hsc->get_config().get_peer_id(other->voter));
+                pn.send_msg(MsgDecisionCheck(*other), hsc->get_config().get_peer_id(dc->voter));
             }
         }
     }
-    auto itor = my_decisions.find(dc.blk_height);
-    if (itor != my_decisions.end() &&(test || itor->second->blk_hash != dc.blk_hash)) {
-        check_conflictss(*itor->second, dc);
+    auto itor = my_decisions.find(dc->blk_height);
+    if (itor != my_decisions.end() &&(test || itor->second->blk_hash != dc->blk_hash)) {
+        check_conflict(*itor->second, dc);
     }
 }
 
-void Accountability::add_my_decision(DecisionCheck& dc) {
+void Accountability::add_my_decision(std::shared_ptr<DecisionCheck> dc) {
     
     detect_server_from = detect_server_to;
-    detect_server_to = size_t (std::floor(dc.blk_height * fault_detect_server_num));
-    dc.cert = hsc->create_part_cert(*hsc->get_priv_key(), dc.get_hash());
+    detect_server_to = size_t (std::floor((dc->blk_height +1) * fault_detect_server_num));
+    dc->cert = hsc->create_part_cert(*hsc->get_priv_key(), dc->get_hash());
     MsgDecisionCheck msg_check(dc);
     if (detect_server_from < detect_server_to) {
         for (size_t i = detect_server_from; i < detect_server_to; i++) {
@@ -119,38 +118,43 @@ void Accountability::add_my_decision(DecisionCheck& dc) {
             }
         }
     }
-    my_decisions[dc.blk_height] = new DecisionCheck(dc);
-    auto itor = other_decisions.find(dc.blk_height);
+    my_decisions[dc->blk_height] = dc;
+    auto itor = other_decisions.find(dc->blk_height);
     if (itor != other_decisions.end()) {
         for (auto & m: itor->second) {
-            if (test || m->blk_hash != dc.blk_hash) {
-                check_conflictss(dc, *m);
+            if (test || m->blk_hash != dc->blk_hash) {
+                check_conflict(dc, *m);
             }
         }
     }
 }
 
-void Accountability::check_conflictss(DecisionCheck my_dc, DecisionCheck other_dc) {
+void Accountability::check_conflict(std::shared_ptr<DecisionCheck> my_dc, std::shared_ptr<DecisionCheck> other_dc) {
     try{
-        if (my_dc.parent_blk_hash == other_dc.parent_blk_hash) {
-            block_t my_blk = storage->find_blk(my_dc.blk_qc_hash);
-            quorum_cert_bt qc = my_blk->get_qc()->clone();
-            Proof proof(my_dc.voter, my_dc.blk_height, my_dc.blk_hash, my_blk->get_qc()->clone(), hsc);
-            pn.send_msg(MsgProof(proof), hsc->get_config().get_peer_id(other_dc.voter));
-        } else {
-            auto my_parent = my_decisions[my_dc.parent_blk_height];
-            pn.send_msg(MsgDecisionCheck(*my_parent), hsc->get_config().get_peer_id(other_dc.voter));
-        }
+        if (test || my_dc->blk_hash != other_dc->blk_hash) {
+            conflict_map[other_dc->voter].push_back(other_dc);
+            if (conflict_map[other_dc->voter].size() > proof_map[other_dc->voter].size() + 1]) {
+                HOTSTUFF_LOG_ERROR("conflict detected for %d", other_dc->voter);
+                return;
+            }
+            block_t my_blk = storage->find_blk(my_dc->blk_hash);
+            Proof proof(my_dc->voter, my_dc->blk_height, my_dc->blk_hash, my_blk->get_self_qc()->clone(), hsc);
+            pn.send_msg(MsgProof(proof), hsc->get_config().get_peer_id(other_dc->voter));
+        } 
     } catch (std::exception &e) {
-        HOTSTUFF_LOG_ERROR("check_conflictss error + %s" , e.what());
+        HOTSTUFF_LOG_ERROR("check_conflict error + %s" , e.what());
     }
+}
+
+void Accountability::add_proof(std::shared_ptr<Proof> proof) {
+    proof_map[proof->voter].push_back(proof);
 }
 
 uint256_t Accountability::get_qc_hash(uint32_t height) {
     
     auto itor = my_decisions.find(height);
     if (itor != my_decisions.end()) {
-        return itor->second->blk_qc_hash;
+        return itor->second->blk_hash;
     }
     HOTSTUFF_LOG_WARN("can not find qc hash for height %d", height);
     return 0;
@@ -361,7 +365,7 @@ void HotStuffBase::proof_handler(MsgProof &&msg, const Net::conn_t &conn) {
 }
 
 
-void HotStuffBase::on_receive_decision_check(DecisionCheck &dc) {
+void HotStuffBase::on_receive_decision_check(std::shared_ptr<DecisionCheck>dc) {
     try {
         accountability.add_other_decision(dc);
     } catch (std::exception &e) {
@@ -373,15 +377,17 @@ void HotStuffBase::on_receive_decision_check(DecisionCheck &dc) {
 void HotStuffBase::on_receive_proof(Proof &proof) {
     uint256_t my_hash = accountability.get_qc_hash(proof.blk_height);
     block_t blk = HotStuffCore::get_delivered_blk(my_hash);
-    if(blk->get_qc_ref()->get_hash() == proof.blk_hash && !accountability.test) {
+    if(my_hash == proof.blk_hash && !accountability.test) {
         LOG_WARN("wrong proof message + %s", std::string(proof).c_str());
         return;
     }
     if (!proof.verify()) {
         LOG_WARN("invalid proof message + %s", std::string(proof).c_str());
     }
+    proof_ptr = std::make_shared<Proof>(proof);
+    accountability.add_proof(proof_ptr);
     for(ReplicaID i = 0; i < get_config().nreplicas; i++){
-        if (proof.cert->has_voter(i) && blk->get_qc()->has_voter(i)) {
+        if (proof.cert->has_voter(i) && blk->get_self_qc()->has_voter(i)) {
             LOG_ERROR("guilty node %d at %d", i, proof.blk_height);
         }
     }
@@ -391,8 +397,7 @@ void HotStuffBase::on_receive_proof(Proof &proof) {
 
 void HotStuffBase::add_my_decision(const block_t &blk) {
     if (!accountability_enabled) return;
-    block_t parent_blk = HotStuffCore::get_delivered_blk(blk->get_qc_ref()->get_parent_hashes()[0]);
-    DecisionCheck dc(HotStuffCore::get_id(), blk->get_qc_ref()->get_height(), blk->get_qc_ref()->get_hash(), parent_blk->get_height(), parent_blk->get_hash(), blk->get_hash(), this);
+    std::shared_ptr<DecisionCheck> dc = std::make_shared<DecisionCheck>(HotStuffCore::get_id(), blk->get_height(), blk->get_hash(), this);
     accountability.add_my_decision(dc);
 }
 void HotStuffBase::req_blk_handler(MsgReqBlock &&msg, const Net::conn_t &conn) {

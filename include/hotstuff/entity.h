@@ -197,7 +197,9 @@ class Block {
     uint32_t get_height() const { return height; }
 
     const quorum_cert_bt &get_qc() const { return qc; }
-
+    
+    const quorum_cert_bt &get_self_qc() const { return self_qc; }
+    
     const block_t &get_qc_ref() const { return qc_ref; }
 
     const bytearray_t &get_extra() const { return extra; }

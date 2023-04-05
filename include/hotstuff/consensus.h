@@ -274,12 +274,6 @@ struct DecisionCheck: public Serializable {
     uint32_t blk_height;
     /** last decided block */
     uint256_t blk_hash;
-    /** block height*/
-    uint32_t parent_blk_height;
-    /** last decided block */
-    uint256_t parent_blk_hash;
-    /** blk qc height*/
-    uint256_t blk_qc_hash;
     /** proof of validity for the check */
     part_cert_bt cert;
 
@@ -292,51 +286,42 @@ struct DecisionCheck: public Serializable {
     DecisionCheck(ReplicaID voter,
         const uint32_t &blk_height,
         const uint256_t &blk_hash,
-        const uint32_t &parent_blk_height,
-        const uint256_t &parent_blk_hash, 
-        const uint256_t &blk_qc_hash,
         HotStuffCore *hsc):
         voter(voter),
         blk_height(blk_height),
         blk_hash(blk_hash),
-        parent_blk_height(parent_blk_height),
-        parent_blk_hash(parent_blk_hash),
-        blk_qc_hash(blk_qc_hash),
         hsc(hsc) {}
 
     DecisionCheck(const DecisionCheck &other):
         voter(other.voter),
         blk_height(other.blk_height),
         blk_hash(other.blk_hash),
-        parent_blk_height(other.parent_blk_height),
-        parent_blk_hash(other.parent_blk_hash),
-        blk_qc_hash(other.blk_qc_hash),
         cert(other.cert ? other.cert->clone() : nullptr),
         hsc(other.hsc) {}
 
      DecisionCheck(DecisionCheck &&other) = default;
     
     void serialize(DataStream &s) const override {
-        s << blk_height << blk_hash << parent_blk_height << parent_blk_hash;
+        s << blk_height << blk_hash ;
         uint256_t check_hash = s.get_hash();
-        s << voter << blk_qc_hash << *cert;
+        s << voter  << *cert;
     }
 
     void unserialize(DataStream &s) override {
         assert(hsc != nullptr);
-        s >> blk_height >> blk_hash >> parent_blk_height >> parent_blk_hash;
-        s >> voter >> blk_qc_hash;
+        s >> blk_height >> blk_hash ;
+        s >> voter ;
         cert = hsc->parse_part_cert(s);
     }
     uint256_t get_hash() const {
         DataStream s;
-        s << blk_height << blk_hash << parent_blk_height << parent_blk_hash;
+        s << blk_height << blk_hash;
         return s.get_hash();
     }
     bool verify() const {
         assert(hsc != nullptr);
         DataStream s;
-        s << blk_height << blk_hash << parent_blk_height << parent_blk_hash;
+        s << blk_height << blk_hash;
         return cert->verify(hsc->get_config().get_pubkey(voter)) &&
                 cert->get_obj_hash() == s.get_hash();
     }
@@ -344,7 +329,7 @@ struct DecisionCheck: public Serializable {
     promise_t verify(VeriPool &vpool) const {
         assert(hsc != nullptr);
         DataStream s;
-        s << blk_height << blk_hash << parent_blk_height << parent_blk_hash;
+        s << blk_height << blk_hash ;
         return cert->verify(hsc->get_config().get_pubkey(voter), vpool).then([this, s](bool result) {
             return result && cert->get_obj_hash() == s.get_hash();
         });
@@ -357,16 +342,13 @@ struct DecisionCheck: public Serializable {
             << "rid=" << std::to_string(voter) << " "
             << "blk=" << get_hex10(blk_hash)
             << "height=" << std::to_string(blk_height)
-            << "parent_blk=" << get_hex10(parent_blk_hash)
-            << "parent_height=" << std::to_string(parent_blk_height)
-            << "qc=" << get_hex10(blk_qc_hash)
             << ">"
           ;
         return s;
     }
     std::string tostring() const{
         std::string s;
-        s = "check: rid=" + std::to_string(voter) + " blk=" + get_hex10(blk_hash) + " height=" + std::to_string(blk_height) + " parent_blk=" + get_hex10(parent_blk_hash) + " parent_height=" + std::to_string(parent_blk_height) + " qc=" + get_hex10(blk_qc_hash);
+        s = "check: rid=" + std::to_string(voter) + " blk=" + get_hex10(blk_hash) + " height=" + std::to_string(blk_height) ;
         return s;
     }
 };
