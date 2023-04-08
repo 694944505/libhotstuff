@@ -147,21 +147,23 @@ class Accountability {
     peernetwork_t &pn;
     BoxObj<EntityStorage> &storage;
     HotStuffCore *hsc;
-    ReplicaID detect_server_from = 0;
-    ReplicaID detect_server_to = 0;
+    uint32_t detect_server_from = 0;
+    uint32_t detect_server_to = 0;
     double fault_detect_server_num;
-    /*EventContext ec = EventContext();
-    TimerEvent impeach_timer;
-    */
+    EventContext ec;
+    TimerEvent impeach_timer; 
     
 public:
     bool test = false;
-    Accountability(peernetwork_t & pn, HotStuffCore *hsc, BoxObj<EntityStorage> &storage, double num) : 
-        pn(pn), hsc(hsc), storage(storage), fault_detect_server_num(num) {
+    Accountability(peernetwork_t & pn, HotStuffCore *hsc, BoxObj<EntityStorage> &storage, double num, const EventContext &ec) : 
+        pn(pn), hsc(hsc), storage(storage), fault_detect_server_num(num), ec(ec) {
             for (ReplicaID i = 0; i < num; i++) {
                 conflict_map[i] = std::vector<std::shared_ptr<DecisionCheck>>();
                 proof_map[i] = std::vector<std::shared_ptr<Proof>>();
             }
+            impeach_timer= TimerEvent(ec, [this](TimerEvent &) {
+                
+            });
         }
     ~Accountability() {}
     void add_other_decision(std::shared_ptr<DecisionCheck> dc);
@@ -173,6 +175,9 @@ public:
     void add_proof(std::shared_ptr<Proof> proof);
 
     uint256_t get_qc_hash(uint32_t height);
+
+    void sendMsg(TimerEvent &ec, uint32_t detect_server_from, uint32_t detect_server_to ,
+         std::shared_ptr<MsgDecisionCheck> msg_check);
 
 };
 

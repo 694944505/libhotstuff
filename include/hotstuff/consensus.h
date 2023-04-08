@@ -274,6 +274,8 @@ struct DecisionCheck: public Serializable {
     uint32_t blk_height;
     /** last decided block */
     uint256_t blk_hash;
+
+    uint256_t qc_hash;
     /** proof of validity for the check */
     part_cert_bt cert;
 
@@ -286,16 +288,19 @@ struct DecisionCheck: public Serializable {
     DecisionCheck(ReplicaID voter,
         const uint32_t &blk_height,
         const uint256_t &blk_hash,
+        const uint256_t &qc_hash,
         HotStuffCore *hsc):
         voter(voter),
         blk_height(blk_height),
         blk_hash(blk_hash),
+        qc_hash(qc_hash),
         hsc(hsc) {}
 
     DecisionCheck(const DecisionCheck &other):
         voter(other.voter),
         blk_height(other.blk_height),
         blk_hash(other.blk_hash),
+        qc_hash(other.qc_hash),
         cert(other.cert ? other.cert->clone() : nullptr),
         hsc(other.hsc) {}
 
@@ -304,13 +309,13 @@ struct DecisionCheck: public Serializable {
     void serialize(DataStream &s) const override {
         s << blk_height << blk_hash ;
         uint256_t check_hash = s.get_hash();
-        s << voter  << *cert;
+        s << qc_hash << voter  << *cert;
     }
 
     void unserialize(DataStream &s) override {
         assert(hsc != nullptr);
         s >> blk_height >> blk_hash ;
-        s >> voter ;
+        s >> qc_hash >> voter ;
         cert = hsc->parse_part_cert(s);
     }
     uint256_t get_hash() const {
